@@ -1,87 +1,78 @@
-# 安装教程
 
-### 快速部署 `laf.js` 服务
+## Intro
 
-> 基于 Docker Compose 快速部署，需要你熟悉 Docker 以及 docker-compose 的使用。
+> WARNING: This is a work in progress. The scripts are not yet ready for production use.
 
-##### 安装 Docker (CentOS)
+> This script is used to deploy the v1.0 development environment. The v1.0 environment has not been released yet, so this script is only for laf contributors to use in the development environment.
 
-> 本例只给出 CentOS 下的安装脚本，若安装其它环境请参考官方文档 https://docs.docker.com/engine/install/。
+## Create development environment on Linux
 
-```sh
-sudo yum install -y yum-utils
-sudo yum-config-manager \
-    --add-repo \
-    https://download.docker.com/linux/centos/docker-ce.repo
+> TIP: Please confirm to operate under the root user!
 
-sudo yum install docker-ce docker-ce-cli containerd.io
-sudo systemctl start docker
+```bash
+cd deploy
 
+# replace with your domain here.
+export DOMAIN=127.0.0.1.nip.io
+
+# install k8s cluster
+sh install-on-linux.sh $DOMAIN
 ```
 
-> 还需安装 docker-compose @see https://docs.docker.com/compose/install/。
+## Create development environment on MacOS
 
-##### 启动服务（docker-compose）
+1. Install multipass on MacOS
 
-```sh
-git clone https://github.com/labring/laf.git
-
-cd laf/deploy/docker-compose
-
-docker network create laf_shared_network --driver bridge || true
-docker pull lafyun/app-service:latest
-
-# 启动所有服务
-docker-compose up
-
-# 浏览器打开 http://console.local-dev.host:8000 访问
+```bash
+# Skip this step if you have already installed multipass
+# see https://multipass.run/install
+brew install --cask multipass
 ```
 
-> TIPs: 
-> We provide `*.local-dev.host` always resolved to `127.0.0.1` anywhere! 
-> Close your VPN then `local-dev.host` resolving works well.
+2. Grant `Settings -> Security & Privacy -> Full Disk Access` for multipassd
 
+3. Create vm & deploy in it
 
-### 开发环境（开发者）
+```bash
+cd deploy
+sh install-on-mac.sh  # create vm & setup in it
+```
+## Create development environment on Windows
 
-```sh
-# install dependencies
-npm install
+1. Install [multipass](https://multipass.run/install) on Windows
 
-# build & watch packages
-npm run build && npm run watch
+> Skip this step if you have already installed multipass
+>
+> Note: `Restart` your computer after install multipass
 
-# create a shared network in docker
-docker network create laf_shared_network --driver bridge || true
+2. Create vm and mount laf into vm
+```powershell
+multipass launch --name laf-dev --cpus 2 --memory 4G --disk 50G
 
-# download the app service image
-docker pull lafyun/app-service:latest
+# Enable multipass mount local directory into vm
+multipass set local.privileged-mounts=true
 
-# launch laf.js services
-docker-compose up
-
-# Now open http://console.local-dev.host:8080 in your browsers!
-
+# Mount laf into vm
+multipass mount ${YOUR_LAF_DIRECOTRY_PATH} laf-dev:/laf/
 ```
 
-> TIPs: 
-> We provide `*.local-dev.host` always resolved to `127.0.0.1` anywhere! 
-> Close your VPN then `local-dev.host` resolving works well.
+3. **Remember change CRLF To LF**
 
-## 测试用例
+File EOF will end by CRLF on windows by default, you need change back to ensure shell scripts could run successfully after mount.
 
-### 启动 MongoDB 测试容器
 
-```sh
-docker run --rm -p 27018:27017 --name mongotest -d mongo
+4. Run install-script in vm
+```powershell
+# Get VM ip
+multipass info laf-dev | Where-Object{$_ -match "IPv4"} | ForEach-Object{ ($_ -split "\s+")[1] }
+#eg. 172.27.x.y -> 172.27.x.y.nip.io
+multipass exec laf-dev -- sudo -u root sh /laf/deploy/install-on-linux.sh $VM_IP_GOT_ABOVE.nip.io
 ```
 
-### 运行测试
 
-```sh
-# 运行测试用例
-npx mocha ./packages/*/tests/**/*.test.js
-
-# 清除测试容器
-docker rm -f mongotest
+5. Wait k8s cluster ready & Copy kubeconfig to host
+```powershell
+multipass exec $NAME -- sudo -u root kubectl get nodes
+# After nodes status changed to Ready, you can copy kubeconfig file into your host machine
+multipass exec laf-dev -- sudo -u root cat /root/.kube/config > $HOST_PATH_WHERE_YOU_WANT_LOCATE_CONFIG_FILE
 ```
